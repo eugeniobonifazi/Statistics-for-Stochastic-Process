@@ -1,0 +1,1090 @@
+---
+title: "Statistics for Stochastic Process - HW1"
+author: "Eugenio Bonifazi"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+require(Compositional)
+require(MCMCpack)
+library(LaplacesDemon)
+```
+
+## Exercise 1
+
+Given a Dirichlet process $G \sim DP(M, G_0(\cdot))$ distributed over the space $\mathfrak{X}$, we have to determine the sign of the correlation between the realizations of this DP respect to two disjoint sets $B_1$ and $B_2$, $Corr(G(B_1), G(B_2))$. But since:
+\[cor(G(B_1), G(B_2))=\frac{cov(G(B_1), G(B_2))}{\sigma(G(B_1))\sigma(G(B_2))}\] 
+where $\sigma(\cdot)$ is the standard deviation, that is always positive, the sign of the correlation is determined by the covariance. 
+
+By definition (Moments of the DP), if $G\sim DP(M, G_0)$, then, for any measurable sets $B_1$ and $B_2$:
+
+\[
+cov(G(B_1), G(B_2)) = \frac{G_0(B_1\cap B_2) - G_0(B_1)G_0(B_2)}{M^2(1+M)}
+\]
+
+If we assume $B_1 \cap B_2 = \emptyset$, then we can say that $\Big\{B_1, B_2, B_1^c \cap B_2^c \Big\}$ is a partition of $\mathfrak{X}$. Hence, as a consequence: $(G(B_1), G(B_2), G(B_1^c \cap B_2^c)) \sim Dir(3; M G_0(B_1), MG_0(B_2), MG_0(B_1^c \cap B_2^c))$. 
+Hence the covariance is:
+\[
+cov(G(B_1), G(B_2)) = -\frac{G_0(B_1)G_0(B_2)}{M^2(1+M)}
+\]
+
+That is always negative.
+Since, for each possible partition of the space $\mathfrak{X}$ in the Dirichlet process, the sets are pairwise disjoint by definition, I tried also to verify the negative correlation simulating different DPs with increasing number of sets. 
+
+```{r}
+set.seed(100)
+
+# this function counts all the positive and negtive correlations between each couple 
+# of sets in the partition
+
+check.negative.correlation <- function(cor_mat){
+  neg_perc = 0
+  pos_perc = 0
+  for(i in 1:(ncol(cor_mat)-1)){
+    for(j in (i+1):ncol(cor_mat)){
+    if(cor(cor_mat[,i], cor_mat[,j])<=0){
+      neg_perc = neg_perc + 1
+    }
+      else{
+        pos_perc = pos_perc + 1
+      }
+}
+  }
+  
+  tot = neg_perc + pos_perc
+  res = cbind(neg_perc = (neg_perc/tot)*100, pos_perc = (pos_perc/tot)*100)
+
+  return(res)
+  
+}
+
+
+# simulation for 10 disjoint sets 
+two_sets_1 = gtools::rdirichlet(1000, sample(1:100, 5, replace = T))
+# simulation for 20 disjoint sets
+two_sets_2 = gtools::rdirichlet(1000, sample(1:100, 10, replace = T))
+# simulation for 50 disjoint sets
+two_sets_3 = gtools::rdirichlet(1000, sample(1:100, 20, replace = T))
+# simulation for 100 disjoint sets
+two_sets_4 = gtools::rdirichlet(1000, sample(1:100, 50, replace = T))
+
+par(mfrow=c(2,2))
+hist(two_sets_1[1,], breaks = 100, main = "Masses of the pdf of a DP with 5 sets", xlab = "x")
+hist(two_sets_2[2,], breaks = 100, main = "Masses of the pdf of a DP with 10 sets", xlab = "x")
+hist(two_sets_3[3,], breaks = 100, main = "Masses of the pdf of a DP with 20 sets", xlab = "x")
+hist(two_sets_4[4,], breaks = 100, main = "Masses of the pdf of a DP with 50 sets", xlab = "x")
+
+
+neg_corr_1 <- check.negative.correlation(two_sets_1)
+neg_corr_2 <- check.negative.correlation(two_sets_2)
+neg_corr_3 <- check.negative.correlation(two_sets_3)
+neg_corr_4 <- check.negative.correlation(two_sets_4)
+
+print(cbind.data.frame("# of sets"= c(5, 10, 20, 50), "negative correlations" = c(round(neg_corr_1[1],2),round(neg_corr_2[1],2),round(neg_corr_3[1],2), round(neg_corr_4[1],2)), "positive correlations" = c(round(neg_corr_1[2],2), round(neg_corr_2[2],2), round(neg_corr_3[2],2), round(neg_corr_4[2],2))))
+
+```
+
+
+In these simulations are considered Dirichlet processes generated with different number of sets (5, 10, 20, 50 respectively) with parameters chosen at random in the set $\big\{M$ in $[1,10]$ s.t. $M \in \mathbb{N} \big\}$. Of course, in order to be able to calculate the covariances between the DP over different sets, we have samples with a large number of simulations ($n = 1000$) of the same $G \sim DP(M, G_0(\cdot))$ from which are taken all the $Corr(G(B_i), G(B_j))$, with $i\neq j$. 
+As we can see from the table above, in the first simulations negative correlations always occur. However, increasing the number of sets, the percentage of negative correlations decreseases and we register a significant increasing amount of positive correlations.
+Neverthless, this is explained by the fact that increasing the number of sets the point-masses are getting closer to zero (in the last simulation the highest mass value is close to 0.04). As a consequence, between vector of zeroes, we have correlations still close to zero that, in turn, can have positive or negative values by chance (just because of the program's approximation). 
+
+This presence of negative correlation is a restriction given by the assumption of pairwise disjoint sets in each possible partition $\big\{ B_1, B_2,.., B_k\big\}$ of the set $\mathfrak{X}$ in a $DP(M; G_0(B_1), ...,G_0(B_n))$.
+
+
+## Exercise 2
+
+
+We are asked to implement a simulation of $DP\big(M, G_0(\cdot)\big)$ prior with $G_0 \sim N(0,1)$ according to both Ferguson's and Sethurama's definitions; then, the task is to implement a Mixture Dirichlet Process choosing one of the previous two. 
+I'll proceed with the Ferguson's approach till the MDP and then with the simulations according with Sethuraman's constructive definition of the prior. 
+
+
+#### Ferguson's definition of the Dirichlet Process
+
+Ferguson gave the original definition of the DP considering a probability space $(\Theta, A, G)$ and an arbitrary partition $\{A_1,...,A_k\}$ of $\Theta$. A random distribution is said to follow a Dirichlet process prior with baseline probability measure $G_0$ and mass parameter $M$, denoted by $G \sim DP(M, G_0)$, if
+\[
+(G(A_1),...,G(A_k)) \sim Dir(MG_0(A_1),...,MG_0(A_k))
+\]
+
+The first step of this part consists in simulating one hundred prior realizations of a $DP(M, G_0)$ with $G_0 \sim N(0,1)$ for four different and increasing values of M. Then I'll take into account both the probabily masses and the cumulative distributions of each simulated prior providing a graphic visualization respect to the base Gaussian distribution.
+
+
+```{r}
+
+# Ferguson's simulation function that returns a list containing the parameters of the 
+# DP(k, MG_0(A_1),..MG_0(A_k)), and two matrices containing the probability masses and 
+# the cumulative distributions of the simulated Dirichlet processes
+
+ferguson.sim <- function(nn, k, M){
+  
+x <- seq(-8, 8, length=k)  
+y <- c()
+y[1] <- pnorm(x[1])
+for(i in 2:(k)) y[i] <- pnorm(x[i]) - pnorm(x[(i-1)])
+y <- c(y, 1-pnorm(x[(k)]))
+param <- M*y
+sdir <- gtools::rdirichlet(nn,param)
+t_sdir <-t(sdir)
+draw <- apply(t_sdir, 2, cumsum)
+return(list(param = param, t_sdir = t_sdir, draw = draw))}
+
+
+xx <- c(seq(-8,8, length=20), 9)   
+
+
+# 100 simulation with 20M=1
+ferg_1 = ferguson.sim(100, 20, 1)
+t_sdir_1 <- ferg_1$t_sdir
+draws_1 <- ferg_1$draw
+
+# 100 simulation with M=10
+ferg_2 = ferguson.sim(100, 20, 10)
+t_sdir_2 <- ferg_2$t_sdir
+draws_2 <- ferg_2$draw
+
+# 100 simulation with M=40
+ferg_3 = ferguson.sim(100, 20, 40)
+draws_3 <- ferg_3$draw
+t_sdir_3 <- ferg_3$t_sdir
+
+# 100 simulation with M=100
+ferg_4 = ferguson.sim(100, 20, 100)
+t_sdir_4 <- ferg_4$t_sdir
+draws_4 <- ferg_4$draw
+
+
+# plots of the probability densities
+
+par(mfrow=c(2,2))
+
+matplot(xx, t_sdir_1, col=2:101, type = "l", xlim = c(-4,4), ylim = c(0,1),ylab = expression(DP(1, N(0,1))))
+curve(dnorm(x), add=T, type = "l", lwd = 2)
+matplot(xx, t_sdir_2, col=2:101, type = "l", xlim = c(-4,4), ylim = c(0,0.8), ylab = expression(DP(10, N(0,1))))
+curve(dnorm(x), add=T, type = "l", lwd = 2)
+matplot(xx, t_sdir_3, col=2:101, type = "l", xlim = c(-4,4), ylim = c(0,0.6), ylab = expression(DP(40, N(0,1))))
+curve(dnorm(x), add=T, type = "l", lwd = 2)
+matplot(xx, t_sdir_4, col=2:101, type = "l", xlim = c(-4,4), ylim = c(0,0.6), ylab = expression(DP(100, N(0,1))))
+curve(dnorm(x), add=T, type = "l", lwd = 2)
+par(mfrow=c(2,2))
+
+
+# plots of cumulative distributions 
+
+matplot(xx, draws_1, col=2:101, type = "l", xlim = c(-4,4), ylim = c(0,1), ylab = expression(DP(1, N(0,1))))
+curve(pnorm(x), add=T, type = "l", lwd = 2)
+matplot(xx, draws_2, col=2:101, type = "l", xlim = c(-4,4), ylim = c(0,1), ylab = expression(DP(10, N(0,1))))
+curve(pnorm(x), add=T, type = "l", lwd = 2)
+matplot(xx, draws_3, col=2:101, type = "l", xlim = c(-4,4), ylim = c(0,1), ylab = expression(DP(40, N(0,1))))
+curve(pnorm(x), add=T, type = "l", lwd = 2)
+matplot(xx, draws_4, col=2:101, type = "l", xlim = c(-4,4), ylim = c(0,1), ylab = expression(DP(100, N(0,1))))
+curve(pnorm(x), add=T, type = "l", lwd = 2)
+
+```
+
+As we can see from both cdf and pdf, increasing the value of M, the simulations get closer to the baseline Normal distribution. As a matter of fact, the value of M corresponds to our certainty about the baseline distribution and, as a consequence, for the smallest M we used we have a very high variability respect to the standard Normal. 
+An analysis of the distributions of the prior mean and variance are given below.
+
+
+```{r}
+
+# Function that evaluates the expected value of each simulation and store all of them
+# into a vector given as result.
+
+mean.functional <- function(xx, matr){
+  mean_vec = c()
+  for(i in 1:ncol(matr)){
+    mean_vec[i] = sum(xx*matr[,i])
+  }
+  return(mean_vec)
+}
+
+
+# Function that evaluates the variance of each simulation and store all of them into 
+# a vector given as result.
+
+variance.functional <- function(xx, matr, mean_vec){
+  var_vec = c()
+  for(i in 1:ncol(matr)){
+    var_vec[i] <- sum(xx^2*matr[,i]) - mean_vec[i]^2
+  }
+  return(var_vec)
+}
+
+
+xx <- c(seq(-8,8, length=21))   
+
+mean_t_sdir_1 <- mean.functional(xx, t_sdir_1)
+mean_t_sdir_2 <- mean.functional(xx, t_sdir_2)
+mean_t_sdir_3 <- mean.functional(xx, t_sdir_3)
+mean_t_sdir_4 <- mean.functional(xx, t_sdir_4)
+
+
+var_val_t_sdir_1 <- variance.functional(xx, t_sdir_1, mean_t_sdir_1)
+var_val_t_sdir_2 <- variance.functional(xx, t_sdir_1, mean_t_sdir_2)
+var_val_t_sdir_3 <- variance.functional(xx, t_sdir_1, mean_t_sdir_3)
+var_val_t_sdir_4 <- variance.functional(xx, t_sdir_1, mean_t_sdir_4)
+
+
+
+cbind("M values"= c(5, 10, 20, 50), "Mean" = c(mean(mean_t_sdir_1), mean(mean_t_sdir_2), mean(mean_t_sdir_3), mean(mean_t_sdir_4)), "Variance" = c(mean(var_val_t_sdir_1), mean(var_val_t_sdir_2), mean(var_val_t_sdir_3), mean(var_val_t_sdir_4)))
+
+```
+
+For increasing values of M we saw that the prior distribution get closer to the baseline distribution. This is shown also by the beahaviour of the means and the variances of the different simulations: increasing M both mean and variance get closer to the ones of the Standard Normal.
+
+```{r}
+# MDP with prior Gamma(3,3)
+
+xx_2 <- c(seq(-4,4, length=10), 5)   
+xx_3 <- c(seq(-4,4, length=20), 5)   
+xx_4 <- c(seq(-4,4, length=30), 5)   
+
+
+# 100 simulation with M=1
+ferg_1 = ferguson.sim(100, 10, rgamma(1, 3, 3))
+t_sdir_1 <- ferg_1$t_sdir
+draws_1 <- ferg_1$draw
+
+# 100 simulation with M=10
+ferg_2 = ferguson.sim(100, 10, rgamma(1, 3, 3))
+t_sdir_2 <- ferg_2$t_sdir
+draws_2 <- ferg_2$draw
+
+# 100 simulation with M=40
+ferg_3 = ferguson.sim(100, 20, rgamma(1, 3, 3))
+draws_3 <- ferg_3$draw
+t_sdir_3 <- ferg_3$t_sdir
+
+# 100 simulation with M=100
+ferg_4 = ferguson.sim(100, 30, rgamma(1, 3, 3))
+t_sdir_4 <- ferg_4$t_sdir
+draws_4 <- ferg_4$draw
+
+
+# plots of cumulative distributions 
+
+par(mfrow=c(2,2))
+matplot(xx_2, draws_1, col=2:101, type = "l", xlim = c(-4,4), ylim = c(0,1), ylab = "DP(Gamma(3,3), N(0,1))", xlab = "x")
+curve(pnorm(x), add=T, type = "l", lwd = 2)
+matplot(xx_2, draws_2, col=2:101, type = "l", xlim = c(-4,4), ylim = c(0,1), ylab = "DP(Gamma(3,3), N(0,1))", xlab = "x")
+curve(pnorm(x), add=T, type = "l", lwd = 2)
+matplot(xx_3, draws_3, col=2:101, type = "l", xlim = c(-4,4), ylim = c(0,1), ylab = "DP(Gamma(3,3), N(0,1))", xlab = "x")
+curve(pnorm(x), add=T, type = "l", lwd = 2)
+matplot(xx_4, draws_4, col=2:101, type = "l", xlim = c(-4,4), ylim = c(0,1), ylab = "DP(Gamma(3,3), N(0,1))", xlab = "x")
+curve(pnorm(x), add=T, type = "l", lwd = 2)
+
+```
+
+For all these simulation we have a relavant amount of uncertainty; this is due by the fact that $E(X)$ for $X\sim Gamma(3,3)$ is close to one (see the plot of the Gamma(3,3) below). Since we pick M at random from the Gamma(3, 3) we'll have very small values of M and, as a consequence, our certainty about the baseline distribution is small.
+
+
+```{r}
+gamma.sim <- rgamma(10000, 3,3)
+hist(gamma.sim, xlab = "x", main = "Histogram of a simulated Gamma(3,3)", col = "lightblue", breaks = 100,lwd = 2)
+abline(v=mean(gamma.sim), col = 2, lwd = 2)
+```
+
+
+#### Sethuraman's definition
+
+Sethuraman provided a "stick-breaking" construction of the definition of the Dirichlet process.
+Let $\delta_{\theta}(\cdot)$ denote a point mass at $\theta$. A random probalility measure
+\[
+G(\cdot)=\sum_{h=1}^{\infty}w_h \delta_{\tilde{\theta_{h}}}(\cdot)
+\]
+
+has a $DP(M, G_0)$ prior if $\tilde{\theta_{h}}$ are i.i.d. samples from $G_0$ and $w_h=v_h \prod_{k<h}\{1-v_k\}$ with $v_h \overset{\text{i.i.d.}}{\sim} Beta(1,M)$.
+
+```{r}
+
+# implementation of Sethuraman's definition 
+
+sim_dirichlet_process <- function(N, M = 10, do_norm = TRUE, do_plot = TRUE){
+  
+   theta_vec <- rnorm(N, 0, 1)
+   
+   # STICK BREAKING
+z <- rbeta(N , 1, M)
+log_z  <- log(z)
+S_log <- c(0 , cumsum(log((1 - z)))[-N] )
+log_w <- log_z + S_log
+
+# Convert back to weights
+w <- exp(log_w)
+
+# Some plots
+
+if(do_plot){
+
+ts.plot(w, xlab = "Weight number", ylab = "Weight", main = paste("N = ", N))
+
+# Check sum
+print(paste("Sum of weights", round(sum(w), 2)))
+
+# Mean and variance
+print(paste("Mean", round(sum(w * theta_vec), 2)))
+print(paste("Variance", round(sum(w * theta_vec^2) - sum(w * theta_vec)^2, 2)))
+
+# Plot discrete points
+plot(theta_vec, w, xlab = "X", ylab = "Probability", type = "h")
+
+# Add appropriate title
+   title(main = "Underlying Normal")
+   
+# State alpha in subtitle
+title(sub = bquote(M == .(M)))
+
+# Now plot the cdf
+plot(theta_vec[order(theta_vec)], 
+     cumsum(w[order(theta_vec)]), xlab = "X", ylab = "Cumulative probability", 
+     type = "l")
+# Add the underlying cdf
+
+  curve(pnorm(x), add = TRUE, lwd = 2, col = "red")
+
+} 
+return(list(theta_vec = theta_vec, w = w))
+}
+
+```
+
+
+```{r}
+
+par(mfrow=c(1,3))
+sethur_sim_1 <- sim_dirichlet_process(1000, M = 10)
+par(mfrow=c(1,3))
+sethur_sim_2 <- sim_dirichlet_process(1000, M = 20)
+par(mfrow=c(1,3))
+sethur_sim_3 <- sim_dirichlet_process(1000, M = 50)
+par(mfrow=c(1,3))
+sethur_sim_4 <- sim_dirichlet_process(1000, M = 100)
+
+```
+
+
+From the cumulative distributions of the simulations above we find out that, still for the Sethuraman's definition, increasing the value of M the process gets closer to the baseline distribution. 
+However, taking into account the means and the variances, we can see that they are always around zero and one respectively, without seeming affected by the increase of M.
+
+
+## Exercise 3
+
+
+Our goal is to make posterior inference on six datasets generated from two different distributions using three diverse sample sizes, with n equal to 20, 200 and 2000 respectively. In particular the first data-generating function is a $N(0,1)$ while the second is a mixture normal given by: $0.5N(2.5, 0.5^2) + 0.3N(0.5, 0.7^2)+0.2(1.5, 2^2)$. Furthermore, we'll compute these simulations for two different values corresponding to our prior beliefs, i.e. $M=\{5,100\}$.
+As far as we know, if we have data coming from a distribution such as $Y_i\mid G\overset{\text{i.i.d.}}{\sim} G$ for $i=1,...,n$, with $G\sim DP(M,G_0)$ and $G_0\sim N(m,s^2)$, the posterior distribution is distributed as 
+\[G\mid y_1,..,y_n\sim DP\bigg(M+n, \frac{MG_0+\sum_{i=1}^{n}\delta_{y_i}}{M+n} \bigg)\].
+It follows that the expected value of the posterior distribution is: 
+\[E\big(G\mid Y\big)=\frac{MG_0+\sum_{i=1}^{n}\delta_{y_i}}{M+n}=\frac{MG_0}{M+n}+\frac{nG_n}{M+n}\]
+
+where $G_n=\frac{\sum_{i=1}^{n}\delta_{y_i}}{M+n}$ is the empirical distribution of our data.
+As we can see, the expectation of our posterior is a weighted average between the baseline distribution and the mass probalities of our data, with weights M and n respectively. Consequently,
+in the case of a high value of M, the expected posterior distribution will be highly affected by the baseline distribution; on the other hand, with an increasing sample size, the expected posterior distribution will be much more affected by the data empirical distribution. 
+
+First of all, for each dataset and value of M, I'll procede with an anlysis with respect to mean of the expected posterior distribution using the Gibbs sampling algorithm; then I'll procede simulating the posterior cdf. Both posterior's expectation and cdf are computed considering pointwise and confidence interval estimates.
+
+#### Posterior inference on Standard Normal data
+
+Below there the three histograms of the datasets coming from the Standard Normal distribution.
+
+```{r}
+
+x_1 = rnorm(20,0,1)
+x_2 = rnorm(200,0,1)
+x_3 = rnorm(2000,0,1)
+
+
+
+hist(x_1, breaks = 50, col = "lightgreen", probability = T, main = "Data from the N(0,1), n=20")
+hist(x_2, breaks = 50, col = "lightgreen", probability = T, main = "Data from the N(0,1), n=200")
+hist(x_3, breaks = 50, col = "lightgreen", probability = T, main = "Data from the N(0,1), n=2000")
+
+
+```
+
+
+#### Gibbs sampling
+
+In the chunk below there are the functions used to estimate the expected values of the posterior distribution obtained via Gibbs sampling and the simulation of the posterior's cumulative density function obtained using the Sethuraman's stick breaking definition of the Dirichlet process. 
+
+```{r}
+
+
+#Construct the Conjugate posterior of DP
+
+sample_mu_1 = function(x, z, k, prior){
+  post.mean = rep(0,k)
+  mu = rep(0,k)
+  for(i in 1:k){
+    sample.size = length(x)
+    sample.mean = mean(x)   
+    post.prec = sample.size+prior$prec
+    post.mean[i] = (prior$mean * prior$prec + sample.mean * sample.size)/post.prec
+    mu[i] = rnorm(1,post.mean,sqrt(1/post.prec))
+  }
+  return(list(mu=mu, post.mean = post.mean))
+}
+
+
+# Gibbs
+
+gibbs_1 = function(x,k,niter = 1000, muprior = list(mean,prec)){
+  mu = rnorm(k,0,1)
+  res = list(mu=matrix(nrow=niter, ncol=k), post.mean=matrix(nrow=niter, ncol=k))
+  res$mu[1,]= mu
+  res$post.mean[1,] = muprior$mean
+  for(i in 2:niter){
+    mu = sample_mu_1(x,1,k,muprior)
+    res$mu[i,] = mu$mu
+    res$post.mean[i,] = mu$post.mean
+  }
+  return(res)
+}
+
+
+
+###########################       CDF estimate      #################################################
+cdf <- function(emp_cdf, n=1000) {return(emp_cdf@r(n))}
+
+
+# generates n samples from a DP(M, F_0)
+dir.process.cdf <- function(M=M, F_0=F_0, n=1000){
+  
+   theta_vec <- cdf(F_0, n)
+   
+   # stick breaking
+z <- rbeta(n , 1, M)
+log_z  <- log(z)
+S_log <- c(0 , cumsum(log((1 - z)))[-n] )
+log_w <- log_z + S_log
+
+# Convert back to weights
+w <- exp(log_w)
+function (size=1000) {
+    sample(theta_vec, size, prob=w, replace=TRUE)
+}
+}
+
+
+# this function simulates the posterior cdfs
+dp_posterior <- function(M=M, F_0=F_0, X) {
+  n <- length(X)
+  F_n <- distr::DiscreteDistribution(X) # compute empirical cdf
+  
+  F_bar <- n/(n+M) * F_n + M/(n+M) * F_0
+  
+  dir.process.cdf(M+n, F_bar)
+}
+
+baseline_distro = function(n) rnorm(n, 2.5, 1)
+F_0 = distr::DiscreteDistribution(baseline_distro(20)) #pdf of prior guess N(2.5,1)
+
+
+#We construct a function which saves all the updated cdfs  
+app = function(x,M) {
+  xs    <- seq(-4,5,len=50)
+  Fpost <- dp_posterior(M, F_0, x)  
+  return(ecdf(Fpost())(xs))    # just keeping values of cdf(xs)
+  }
+  
+
+########### Plots ################
+
+
+plot.cdfs <- function(cdfs, M){
+  for (i in 1:3){
+  
+   
+  n_size = c(20, 200, 2000)
+  xs = seq(-4,5,len=50)
+
+  
+  # plot the black area
+  plot(xs, pnorm(xs, 2,1), type="n", ylim=c(-.1,1.1), col="blue", lwd=2, ylab="", xlab="",
+       main =paste("Posterior estimated cdf with ","n =", n_size[i],"and M =", M))
+  
+  # compute & plot 90% credible interval of the posterior
+  crebible_int <- apply(cdfs[[i]], 1, function(row) HPDinterval(as.mcmc(row), prob=0.90))
+  polygon(c(rev(xs), xs), c(rev(crebible_int[1,]), 
+                            crebible_int[2,]), col = 'lightcyan1')    
+  # plot the prior cdf
+  points(xs, pnorm(xs, 2.5, 1), type="l", col="blue", lwd=2)
+  
+  # plot mean estimate of the posterior
+  means <- apply(cdfs[[i]], 1, mean)
+  points(xs, means, type="l", col="red", lwd=2)                  
+  
+  # plot true data generator
+  points(xs, pnorm(xs, 0, 1), type="l", col="springgreen4", lwd=2)
+  legend(x=3,y=.2,c("prior N(2.5,1)","posterior", "truth"), 
+         col=c("blue","red","springgreen4"), lwd=2, bty = "n",cex = 0.75) 
+  
+  }
+  
+}
+
+```
+
+
+It follows both mean and cdf simulations and estimates taking M=5 
+
+##### M = 5
+
+We can see that the estimated means get closer to the true value with an increased sample size.
+Furthermore, taking into account both plots and confidence intervals printed below, we can see values always around zero, even for n=20, but with decreasing variability.
+
+```{r}
+
+####################   M = 5  ##################################
+par(mfrow=c(3,1))
+
+# n = 20, M=5
+res1 = gibbs_1(x_1,1, muprior = list(mean=2,prec=5))
+plot(res1$mu,ylim=c(-4,4),type="l", ylab = "x")
+
+
+# n = 200, M=5
+res2 = gibbs_1(x_2,1, muprior = list(mean=2,prec=5))
+plot(res2$mu,ylim=c(-4,4),type="l", ylab = "x")
+
+
+# n = 2000, M=5
+res3 = gibbs_1(x_3,1, muprior = list(mean=2,prec=5))
+plot(res3$mu,ylim=c(-4,4),type="l", ylab = "x")
+
+```
+
+##### 90% Confidence interval
+
+```{r}
+# 90% posterior CIs:
+
+conf_int_1 = quantile(res1$mu[-(1:100),1],c(0.05,0.95))
+conf_int_2 = quantile(res2$mu[-(1:100),1],c(0.05,0.95))
+conf_int_3 = quantile(res3$mu[-(1:100),1],c(0.05,0.95))
+
+cbind("CI for n=20" = conf_int_1, "CI for n=200" = conf_int_2,"CI for n=2000" = conf_int_3)
+
+```
+
+Also from the cdfs showed below we get the same behaviour of the posterior distribution respect to the true data distribution that is: increasing closeness to the true value with the increment of the sample size and a simultaneous decrease of variabity.
+Although we used different priors for the expected values and the cdfs ($N(2,s^2)$, with $s^2$ depending on the value of M, and $N(2.5, 1)$ respectively), we cannot notice relevant differences and this due to the small value of M that is, again, our certainty about the prior.
+
+```{r}
+
+# cdf simulation
+
+cdfs_1_5 = do.call(rbind,list(replicate(50,app(x=x_1,M=5))))
+cdfs_2_5 = do.call(rbind,list(replicate(50,app(x=x_2,M=5))))
+cdfs_3_5 = do.call(rbind,list(replicate(50,app(x=x_3,M=5))))
+
+cdfs = list(cdfs_1_5, cdfs_2_5, cdfs_3_5)
+
+plot.cdfs(cdfs, M=5)
+
+
+```
+
+##### M = 100
+
+We already saw that the expected value of the posterior distribution, that is:
+\[E\big(G\mid Y\big)=\frac{MG_0}{M+n}+\frac{nG_n}{M+n}\]
+is a weghted average of the balesine distribution and the data distribution. Hence in this case we have a much bigger value of M, respect to the previous amalysis, our prediction is much more affected by the prior mean (that is $\mu=2$ in the case of the first simulation); in fact for the smallest sample size we have that the estimated value matches more with the prior mean than the true one.
+However, increasing the sample size and for $n=2000$ in particular, we see that the estimated values actually go close to the true mean. 
+
+```{r}
+
+##################### M = 100 ###########################
+par(mfrow=c(3,1))
+
+# n = 20
+res1 = gibbs_1(x_1,1, muprior = list(mean=2,prec=100))
+plot(res1$mu,ylim=c(-4,4),type="l", ylab = "x")
+
+
+# n = 200
+res2 = gibbs_1(x_2,1, muprior = list(mean=2,prec=100))
+plot(res2$mu,ylim=c(-4,4),type="l", ylab = "x")
+
+
+# n = 2000
+res3 = gibbs_1(x_3,1, muprior = list(mean=2,prec=100))
+plot(res3$mu,ylim=c(-4,4),type="l", ylab = "x")
+
+```
+
+##### 90% Confidence interval
+
+```{r}
+
+# 90% posterior CIs:
+
+conf_int_1 = quantile(res1$mu[-(1:100),1],c(0.05,0.95))
+conf_int_2 = quantile(res2$mu[-(1:100),1],c(0.05,0.95))
+conf_int_3 = quantile(res3$mu[-(1:100),1],c(0.05,0.95))
+
+print("90% CONFIDENCE INTERVALS")
+cbind("CI for n=20" = conf_int_1, "CI for n=200" = conf_int_2,"CI for n=2000" = conf_int_3)
+
+```
+
+In the cdfs we can clearly notice the same behaviour we described above in the case of the estimates respect to the mean. Also in this case I chose a different prior for cdf (that is still $N(2.5,1)$). 
+
+```{r}
+
+### 
+cdfs_1_100 = do.call(rbind,list(replicate(50,app(x=x_1,M=100))))
+cdfs_2_100 = do.call(rbind,list(replicate(50,app(x=x_2,M=100))))
+cdfs_3_100 = do.call(rbind,list(replicate(50,app(x=x_3,M=100))))
+
+
+cdfs = list(cdfs_1_100, cdfs_2_100, cdfs_3_100)
+
+plot.cdfs(cdfs, M=100)
+
+```
+
+
+#### Posterior inference on Mixture Normal data
+
+
+In this case we have three different datasets generated from a mixture of Normal distributions that is, in particular given by: $0.5N(2.5, 0.5^2) + 0.3N(0.5, 0.7^2)+0.2(1.5, 2^2)$.
+It is visible from the histograms below that the result of the mixture is a bimodal distribution, despite of the three Gaussians in the weighted average. 
+
+For this analysis I proceded in the same way of the previous one but, since we have this multinomial distribution, I estimated two diferent expected values, corrisponding to the distribution's modes, for each simulation. These two modes can be also interpreted as the clusters in the Dirichlet process.
+
+```{r}
+
+rmix = function(n,pi,mu,s){
+  z = sample(1:length(pi),prob=pi,size=n,replace=TRUE) #nonparametric bootstrap
+  x = rnorm(n,mu[z],s[z])
+  return(x)
+}
+# Histogram of the datasets 
+
+x_1 = rmix(n=20, pi=c(0.5, 0.3, 0.2), mu=c(2.5,0.5, 1.5), s=c(0.5, 0.7, 2))
+x_2 = rmix(n=200, pi=c(0.5, 0.3, 0.2), mu=c(2.5,0.5, 1.5), s=c(0.5, 0.7, 2))
+x_3 = rmix(n=2000, pi=c(0.5, 0.3, 0.2), mu=c(2.5,0.5, 1.5), s=c(0.5, 0.7, 2))
+
+
+hist(x_1,breaks=100, col = "lightgreen", probability = T, main = "Data from the mixture of Normal distributons, n=20")
+hist(x_2,breaks=100, col = "lightgreen", probability = T, main = "Data from the mixture of Normal distributons, n=200")
+hist(x_3,breaks=100, col = "lightgreen", probability = T, main = "Data from the mixture of Normal distributons, n=2000")
+
+```
+
+
+
+```{r}
+
+# generate from mixture of normals
+
+x = rmix(n=2000,pi=c(0.5, 0.3, 0.2),mu=c(2.5,0.5, 1.5),s=c(0.5, 0.7, 2))
+
+ normalize = function(x){return(x/sum(x))}
+
+sample_z = function(x,pi,mu){
+    dmat = outer(mu,x,"-") # k by n matrix, d_kj =(mu_k - x_j)
+    p.z.given.x = as.vector(pi) * dnorm(dmat,0,1) 
+    p.z.given.x = apply(p.z.given.x,2,normalize) # normalize columns
+    z = rep(0, length(x))
+    for(i in 1:length(z)){
+      z[i] = sample(1:length(pi), size=1,prob=p.z.given.x[,i],replace=TRUE)
+    }
+    return(z)
+  }
+ 
+
+  sample_pi = function(z,k){
+    counts = colSums(outer(z,1:k,FUN="=="))
+    pi = gtools::rdirichlet(1,counts+1)
+    return(pi)
+  }
+
+  sample_mu = function(x, z, k, prior){
+    df = data.frame(x=x,z=z)
+    mu = rep(0,k)
+    for(i in 1:k){
+      sample.size = sum(z==i)
+      sample.mean = ifelse(sample.size==0,0,mean(x[z==i]))
+      post.prec = sample.size+prior$prec
+      post.mean = (prior$mean * prior$prec + sample.mean * sample.size)/post.prec
+      mu[i] = rnorm(1,post.mean,sqrt(1/post.prec))
+    }
+    return(mu)
+  }
+  
+  gibbs = function(x,k,niter =1000, muprior = list(mean=0,prec=5 )){
+    pi = rep(1/k,k) # initialize
+    mu = rnorm(k,0,1/muprior$prec)
+    z = sample_z(x,pi,mu)
+    res = list(mu=matrix(nrow=niter, ncol=k), pi = matrix(nrow=niter, ncol=k), z = matrix(nrow=niter, ncol=length(x)))
+    res$mu[1,]=mu
+    res$pi[1,]=pi
+    res$z[1,]=z 
+    for(i in 2:niter){
+        pi = sample_pi(z,k)
+        mu = sample_mu(x,z,k,muprior)
+        z = sample_z(x,pi,mu)
+        res$mu[i,] = mu
+        res$pi[i,] = pi
+        res$z[i,] = z
+    }
+    return(res)
+  }
+
+  
+##################        updated function for cdf's plots        ################################
+
+p <- c(0.5,0.3,0.2)
+mu <- c(2.5, 0.5, 1.5)
+sigma <- c(0.5,0.7,2)
+
+plot.cdfs <- function(cdfs, M){
+  for (i in 1:3){
+    
+  n_size = c(20, 200, 2000)
+  xs = seq(-4,5,len=50)
+  
+
+  
+  # plot the black area
+  plot(xs, pnormm(xs, p,mu, sigma), type="n", ylim=c(-.1,1.1), col="blue", lwd=2, ylab="", xlab="",
+       main =paste("Posterior estimated cdf with ","n =", n_size[i],"and M =",M))
+  
+  # compute & plot 90% credible interval of the posterior
+  crebible_int <- apply(cdfs[[i]], 1, function(row) HPDinterval(as.mcmc(row), prob=0.90))
+  polygon(c(rev(xs), xs), c(rev(crebible_int[1,]), 
+                            crebible_int[2,]), col = 'lightcyan1')    
+  # plot the prior cdf
+  points(xs, pnorm(xs, 0, 1), type="l", col="blue", lwd=2)
+  
+  # plot mean estimate of the posterior
+  means <- apply(cdfs[[i]], 1, mean)
+  points(xs, means, type="l", col="red", lwd=2)                  
+  
+  # plot true data generator
+  points(xs, pnormm(xs, p,mu, sigma), type="l", col="springgreen4", lwd=2)
+  legend(x=3,y=.2,c("prior N(0,1)","posterior", "truth"), 
+         col=c("blue","red","springgreen4"), lwd=2, bty = "n",cex = 0.75) 
+  
+  }
+  
+}
+
+```
+
+
+##### M = 5
+
+```{r}
+
+## M = 5
+
+par(mfrow=c(3,1))
+# n = 20, M=5
+res1 = gibbs(x_1,2, muprior = list(mean=0,prec=5))
+  plot(res1$mu[,1],ylim=c(-4,4),type="l", ylab = "x")
+  lines(res1$mu[,2],col=2)
+
+# n = 200, M=5
+res2 = gibbs(x_2,2, muprior = list(mean=0,prec=5))
+  plot(res2$mu[,1],ylim=c(-4,4),type="l", ylab = "x")
+  lines(res2$mu[,2],col=2)
+
+# n = 2000, M=5
+res3 = gibbs(x,2, muprior = list(mean=0,prec=5))
+  plot(res3$mu[,1],ylim=c(-4,4),type="l", ylab = "x")
+  lines(res3$mu[,2],col=2)
+
+```
+
+
+
+```{r}
+
+# 90% posterior CIs:
+
+ci_1_a <- quantile(res1$mu[-(1:100),1],c(0.05,0.95))
+ci_1_b <- quantile(res1$mu[-(1:100),2],c(0.05,0.95))
+ci_2_a <- quantile(res2$mu[-(1:100),1],c(0.05,0.95))
+ci_2_b <- quantile(res2$mu[-(1:100),2],c(0.05,0.95))
+ci_3_a <-  quantile(res3$mu[-(1:100),1],c(0.05,0.95))
+ci_3_b <- quantile(res3$mu[-(1:100),2],c(0.05,0.95))
+
+
+cbind("n=20, mu_1" = ci_1_a, "n=20, mu_2"=ci_1_b, "n=200, mu_1" = ci_2_a, "n=200, mu_2"=ci_2_b, "n=2000, mu_1" = ci_3_a, "n=2000, mu_2"=ci_3_b)
+
+```
+
+
+
+```{r}
+
+##### CDF ############
+baseline_distro = function(n) rnorm(n, 0, 1)
+F_0 = distr::DiscreteDistribution(baseline_distro(20)) #pdf of prior guess N(0,1)
+
+#M=5
+
+cdfs_1_5 = do.call(rbind,list(replicate(50,app(x=x_1,M=5))))
+cdfs_2_5 = do.call(rbind,list(replicate(50,app(x=x_2,M=5))))
+cdfs_3_5 = do.call(rbind,list(replicate(50,app(x=x_3,M=5))))
+
+cdfs = list(cdfs_1_5, cdfs_2_5, cdfs_3_5)
+
+plot.cdfs(cdfs, M=5)
+
+```
+
+In the first estimate, respect to the means, we can see that the true values are close to zero and two, respectively. As before for a small sample size we have a lot of noise around the true values and, actually, in the first case (n=20) the estimates don't even converge to a unique value but they jump from a value to the other and viceversa.
+
+Taking into account the cdfs we still have increasing closeness to the true value with an increment of the sample size. Since we have a small M the prior distribution doesn't weight too much on the posterior estimate (I used a Standard Normal as baseline distribution).
+
+
+##### M = 100
+
+```{r}
+
+# M = 100
+
+par(mfrow=c(3,1))
+
+# n = 20, M=100
+res1 = gibbs(x_1,2, muprior = list(mean=0,prec=100))
+  plot(res1$mu[,1],ylim=c(-4,4),type="l", ylab = "x")
+  lines(res1$mu[,2],col=2)
+
+# n = 20, M=100
+res2 = gibbs(x_2,2, muprior = list(mean=0,prec=100))
+  plot(res2$mu[,1],ylim=c(-4,4),type="l", ylab = "x")
+  lines(res2$mu[,2],col=2)
+
+# n = 20, M=100
+res3 = gibbs(x_3,2, muprior = list(mean=0,prec=100))
+  plot(res3$mu[,1],ylim=c(-4,4),type="l", ylab = "x")
+  lines(res3$mu[,2],col=2)
+
+```
+
+
+
+```{r}
+
+# 90% posterior CIs:
+
+ci_1_a <- quantile(res1$mu[-(1:100),1],c(0.05,0.95))
+ci_1_b <- quantile(res1$mu[-(1:100),2],c(0.05,0.95))
+ci_2_a <- quantile(res2$mu[-(1:100),1],c(0.05,0.95))
+ci_2_b <- quantile(res2$mu[-(1:100),2],c(0.05,0.95))
+ci_3_a <-  quantile(res3$mu[-(1:100),1],c(0.05,0.95))
+ci_3_b <- quantile(res3$mu[-(1:100),2],c(0.05,0.95))
+
+
+cbind("n=20, mu_1" = ci_1_a, "n=20, mu_2"=ci_1_b, "n=200, mu_1" = ci_2_a, "n=200, mu_2"=ci_2_b, "n=2000, mu_1" = ci_3_a, "n=2000, mu_2"=ci_3_b)
+
+```
+
+
+
+```{r}
+
+##### CDF ############
+baseline_distro = function(n) rnorm(n, 0, 1)
+F_0 = distr::DiscreteDistribution(baseline_distro(20)) #pdf of prior guess N(0,1)
+
+#M=100
+cdfs_1_100 = do.call(rbind,list(replicate(50,app(x=x_1,M=100))))
+cdfs_2_100 = do.call(rbind,list(replicate(50,app(x=x_2,M=100))))
+cdfs_3_100 = do.call(rbind,list(replicate(50,app(x=x_3,M=100))))
+
+
+cdfs = list(cdfs_1_100, cdfs_2_100, cdfs_3_100)
+
+plot.cdfs(cdfs, M=100)
+
+```
+
+
+In this case, according to an higher value of M, we have a stronger prior certainty that affects the posterior estimate. As a matter of fact for n=20 we have that both average and cdf estimates match almost perfectly with the prior mean and distribution.
+
+Below I did the same analysis using still different priors: $N(4,s^2)$, with $s^2$ depending on the value of M, for the mean estimate and $N(4,1)$ for the cumulative distribution.
+
+Taking into account the two modes estimated via Gibbs sampling, these are switched a bith further respect to the true values, for M=5, and they even converge to the prior mean, in the case of M=100. This because the $\mu$ of the prior choice is further (in average) to the true ones respect to the previous choice.
+In the cdf, since it's not a pointwise estimate and the prior choice is still not too far from the true values, we notice more or less the same behaviour of the previous case: higher closeness to the prior distribution for a bigger value of M and, of course, closeness to the true distribution with an increase of the sample size in both cases. 
+
+```{r}
+##################        updated function for cdf's plots        ################################
+
+p <- c(0.5,0.3,0.2)
+mu <- c(2.5, 0.5, 1.5)
+sigma <- c(0.5,0.7,2)
+
+plot.cdfs <- function(cdfs, M){
+  for (i in 1:3){
+    
+  n_size = c(20, 200, 2000)
+  xs = seq(-4,5,len=50)
+  
+
+  
+  # plot the black area
+  plot(xs, pnormm(xs, p,mu, sigma), type="n", ylim=c(-.1,1.1), col="blue", lwd=2, ylab="", xlab="",
+       main =paste("Posterior estimated cdf with ","n =", n_size[i],"and M =",M))
+  
+  # compute & plot 90% credible interval of the posterior
+  crebible_int <- apply(cdfs[[i]], 1, function(row) HPDinterval(as.mcmc(row), prob=0.90))
+  polygon(c(rev(xs), xs), c(rev(crebible_int[1,]), 
+                            crebible_int[2,]), col = 'lightcyan1')    
+  # plot the prior cdf
+  points(xs, pnorm(xs, 0, 1), type="l", col="blue", lwd=2)
+  
+  # plot mean estimate of the posterior
+  means <- apply(cdfs[[i]], 1, mean)
+  points(xs, means, type="l", col="red", lwd=2)                  
+  
+  # plot true data generator
+  points(xs, pnormm(xs, p,mu, sigma), type="l", col="springgreen4", lwd=2)
+  legend(x=3,y=.2,c("prior N(0,1)","posterior", "truth"), 
+         col=c("blue","red","springgreen4"), lwd=2, bty = "n",cex = 0.75) 
+  
+  }
+  
+}
+```
+
+##### M = 5
+
+```{r}
+
+### here we use a different prior mean value-------> mu = 4
+
+## M=5
+
+par(mfrow=c(3,1))
+# n = 20
+res1 = gibbs(x_1,2, muprior = list(mean=4,prec=5))
+  plot(res1$mu[,1],ylim=c(-4,5),type="l", ylab = "x")
+  lines(res1$mu[,2],col=2)
+
+# n = 200
+res2 = gibbs(x_2,2, muprior = list(mean=4,prec=5))
+  plot(res2$mu[,1],ylim=c(-4,5),type="l", ylab = "x")
+  lines(res2$mu[,2],col=2)
+
+
+# n = 2000
+res3 = gibbs(x_3,2, muprior = list(mean=4,prec=5))
+  plot(res3$mu[,1],ylim=c(-4,5),type="l", ylab = "x")
+  lines(res3$mu[,2],col=2)
+
+```
+
+
+
+```{r}
+
+# 90% posterior CIs:
+
+ci_1_a <- quantile(res1$mu[-(1:100),1],c(0.05,0.95))
+ci_1_b <- quantile(res1$mu[-(1:100),2],c(0.05,0.95))
+ci_2_a <- quantile(res2$mu[-(1:100),1],c(0.05,0.95))
+ci_2_b <- quantile(res2$mu[-(1:100),2],c(0.05,0.95))
+ci_3_a <-  quantile(res3$mu[-(1:100),1],c(0.05,0.95))
+ci_3_b <- quantile(res3$mu[-(1:100),2],c(0.05,0.95))
+
+
+cbind("n=20, mu_1" = ci_1_a, "n=20, mu_2"=ci_1_b, "n=200, mu_1" = ci_2_a, "n=200, mu_2"=ci_2_b, "n=2000, mu_1" = ci_3_a, "n=2000, mu_2"=ci_3_b)
+
+
+```
+
+
+
+```{r}
+
+##### CDF ############
+baseline_distro = function(n) rnorm(n, 4, 1)
+F_0 = distr::DiscreteDistribution(baseline_distro(20)) #pdf of prior guess N(4,1)
+
+#M=5
+
+cdfs_1_5 = do.call(rbind,list(replicate(50,app(x=x_1,M=5))))
+cdfs_2_5 = do.call(rbind,list(replicate(50,app(x=x_2,M=5))))
+cdfs_3_5 = do.call(rbind,list(replicate(50,app(x=x_3,M=5))))
+
+cdfs = list(cdfs_1_5, cdfs_2_5, cdfs_3_5)
+
+plot.cdfs(cdfs, M=5)
+
+```
+
+
+
+##### M = 100
+
+```{r}
+
+par(mfrow=c(3,1))
+
+## M=100
+
+# n = 20
+res1 = gibbs(x_1,2, muprior = list(mean=4,prec=100))
+  plot(res1$mu[,1],ylim=c(-4,5),type="l", ylab = "x")
+  lines(res1$mu[,2],col=2)
+
+# n = 200
+res2 = gibbs(x_2,2, muprior = list(mean=4,prec=100))
+  plot(res2$mu[,1],ylim=c(-4,5),type="l", ylab = "x")
+  lines(res2$mu[,2],col=2)
+
+# n = 2000
+res3 = gibbs(x_3,2, muprior = list(mean=4,prec=100))
+  plot(res3$mu[,1],ylim=c(-4,5),type="l", ylab = "x")
+  lines(res3$mu[,2],col=2)
+
+```
+
+
+
+```{r}
+
+# 90% posterior CIs:
+
+ci_1_a <- quantile(res1$mu[-(1:100),1],c(0.05,0.95))
+ci_1_b <- quantile(res1$mu[-(1:100),2],c(0.05,0.95))
+ci_2_a <- quantile(res2$mu[-(1:100),1],c(0.05,0.95))
+ci_2_b <- quantile(res2$mu[-(1:100),2],c(0.05,0.95))
+ci_3_a <- quantile(res3$mu[-(1:100),1],c(0.05,0.95))
+ci_3_b <- quantile(res3$mu[-(1:100),2],c(0.05,0.95))
+
+
+cbind("n=20, mu_1" = ci_1_a, "n=20, mu_2"=ci_1_b, "n=200, mu_1" = ci_2_a, "n=200, mu_2"=ci_2_b, "n=2000, mu_1" = ci_3_a, "n=2000, mu_2"=ci_3_b)
+
+```
+
+
+
+```{r}
+
+##### CDF ############
+baseline_distro = function(n) rnorm(n, 4, 1)
+F_0 = distr::DiscreteDistribution(baseline_distro(20)) #pdf of prior guess N(4,1)
+
+#M=100
+cdfs_1_100 = do.call(rbind,list(replicate(50,app(x=x_1,M=100))))
+cdfs_2_100 = do.call(rbind,list(replicate(50,app(x=x_2,M=100))))
+cdfs_3_100 = do.call(rbind,list(replicate(50,app(x=x_3,M=100))))
+
+
+cdfs = list(cdfs_1_100, cdfs_2_100, cdfs_3_100)
+
+plot.cdfs(cdfs, M=100)
+
+```
+
